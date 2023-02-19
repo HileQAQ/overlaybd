@@ -308,18 +308,22 @@ int Tar::extract_all() {
 	for (auto m: mappings) {
 		auto size = m.second.fm_mapped_extents;
         for (int i = 0; i < size; i++) {
+			LSMT::RemoteMapping lba;
 			auto left = m.second.fm_extents[i].fe_length;
-			auto start = m.second.fm_extents[i].fe_physical;
-			auto rstart = m.first;
+			lba.offset = m.second.fm_extents[i].fe_physical;
+			lba.roffset = m.first;
 			while (left > 0) {
 				size_t len = 0;
-				if (left > LSMT::Segment::MAX_LENGTH * 512)
+				if (left > LSMT::Segment::MAX_LENGTH * 512) {
 					len = LSMT::Segment::MAX_LENGTH * 512;
-				else len = left;
-				((LSMT::IFileRW*)fs_base_file)->add_data_segment(start, len, rstart);
+				} else {
+					len = left;
+				}
+				lba.count = len;
+				((LSMT::IFileRW*)fs_base_file)->ioctl(LSMT::IFileRW::RemoteData, lba);
 				left -= len;
-				start += len;
-				rstart += len;
+				lba.offset += len;
+				lba.roffset += len;
 			}
         }
 	}
