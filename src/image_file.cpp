@@ -33,8 +33,8 @@
 #include "image_file.h"
 #include "sure_file.h"
 #include "switch_file.h"
-#include "overlaybd/gzip/gz.h"
-#include "overlaybd/rgzip/gzfile.h"
+#include "overlaybd/gzindex/gzfile.h"
+#include "overlaybd/gzindex/gzfile_index.h"
 
 #define PARALLEL_LOAD_INDEX 32
 using namespace photon::fs;

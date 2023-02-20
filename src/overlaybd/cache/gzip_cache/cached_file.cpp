@@ -343,7 +343,7 @@ std::string_view CachedGzFile::get_pathname() {
 }
 
 
-ICachedGzFile *new_cached_gzfile(IFile *src, ICacheStore *store, uint64_t pageSize, uint64_t refillUnit,
+ICachedFile *new_cached_gzfile(IFile *src, ICacheStore *store, uint64_t pageSize, uint64_t refillUnit,
                                IOAlloc *allocator, IFileSystem *fs) {
     // new_cached_file requires src is able to fstat
     // once stat is failed, it will return nullptr

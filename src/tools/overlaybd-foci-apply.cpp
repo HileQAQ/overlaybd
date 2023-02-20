@@ -22,8 +22,8 @@
 #include "../overlaybd/zfile/zfile.h"
 #include "../overlaybd/untar/libtar.h"
 #include "../overlaybd/extfs/extfs.h"
-#include "../overlaybd/rgzip/gzfile.h"
-#include "../overlaybd/gzip/gz.h"
+#include "../overlaybd/gzindex/gzfile_index.h"
+#include "../overlaybd/gzindex/gzfile.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
@@ -87,11 +87,14 @@ int main(int argc, char **argv) {
     DEFER(delete tarf);
 
     if (is_gzfile(tarf)) {
-        auto res = create_gz_index(tarf, 1024*1024, "gzip.meta");
+        auto res = create_gz_index(tarf, "gzip.meta");
         LOG_INFO("create_gz_index ", VALUE(res));
         tarf->lseek(0, 0);
-
-        src_file = open_gzfile_adaptor(input_path.c_str());
+        auto gz_index = open_localfile_adaptor("gzip.meta", O_RDONLY, 0644, 0);
+        if (!gz_index) {
+            fprintf(stderr, "failed to open gzip index\n");
+        }
+        src_file = new_gzfile(tarf, gz_index);
     } else {
         src_file = tarf;
     }
