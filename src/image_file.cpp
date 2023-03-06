@@ -27,6 +27,8 @@
 #include <photon/fs/filesystem.h>
 #include <photon/fs/aligned-file.h>
 #include <photon/fs/localfs.h>
+#include "overlaybd/cache/full_file_cache/cache_pool.h"
+#include "overlaybd/cache/frontend/cached_file.h"
 #include "overlaybd/lsmt/file.h"
 #include "overlaybd/zfile/zfile.h"
 #include "config.h"
@@ -254,6 +256,30 @@ void *do_parallel_open_files(ImageFile *imgfile, ParallelOpenTask &tm) {
     return nullptr;
 }
 
+IFile *ImageFile::open_gzip_file(photon::fs::IFile* gzip_file,
+                           photon::fs::IFile* index, bool ownership = false) {
+    IFile *target_file = new_gzfile(gzip_file, index, ownership);
+    auto gzip_conf = image_service.global_conf.gzipCacheConfig();
+    if (gzip_conf.enable()) {
+        struct stat st = {};
+        if (target_file) {
+            auto ok = target_file->fstat(&st);
+            if (ok == -1) {
+                LOG_ERRNO_RETURN(0, nullptr, "target_file fstat failed : `", ok);
+            }
+        }
+        // [!] TODO: what file_name for cache?
+        std::string file_name = std::to_string(rand()) + std::to_string(st.st_size);
+        auto store = image_service.pool->open(file_name, O_RDWR | O_CREAT, 0644);
+        if (nullptr == store) {
+            delete target_file;
+            LOG_ERRNO_RETURN(0, nullptr, "gzip cache pool open file failed");
+        }
+        return new Cache::CachedFile(target_file, store, st.st_size, 4 * 1024, gzip_conf.cacheSizeGB(), image_service.io_alloc, nullptr);
+    }
+    return target_file;
+}
+
 int ImageFile::open_lower_layer(IFile *&file, ImageConfigNS::LayerConfig &layer,
                                 int index) {
     std::string opened;
@@ -286,7 +312,7 @@ int ImageFile::open_lower_layer(IFile *&file, ImageConfigNS::LayerConfig &layer,
             set_failed("failed to open gzip index " + layer.gzipIndex());
             LOG_ERROR_RETURN(0, -1, "open(`),`:`", layer.gzipIndex(), errno, strerror(errno));
         }
-        target_file = new_gzfile(target_file, gz_index, true);
+        target_file = open_gzip_file(target_file, gz_index, true);
     }
     if (target_file != nullptr) {
         file = LSMT::open_warpfile_ro(file, target_file, true);
@@ -389,7 +415,7 @@ LSMT::IFileRW *ImageFile::open_upper(ImageConfigNS::UpperConfig &upper) {
                 LOG_ERROR("open(`,flags), `:`", upper.gzipIndex(), errno, strerror(errno));
                 goto ERROR_EXIT;
             }
-            target_file = new_gzfile(target_file, gzip_index);
+            target_file = open_gzip_file(target_file, gzip_index);
         }
         ret = LSMT::open_warpfile_rw(idx_file, data_file, target_file, true);
         if (!ret) {

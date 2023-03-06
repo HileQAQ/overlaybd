@@ -19,6 +19,7 @@
 #include <string>
 #include "config.h"
 #include "exporter_server.h"
+#include "overlaybd/cache/full_file_cache/cache_pool.h"
 #include <photon/fs/filesystem.h>
 #include <photon/common/io-alloc.h>
 
@@ -53,9 +54,15 @@ public:
     ImageFile *create_image_file(const char *image_config_path);
     ImageConfigNS::GlobalConfig global_conf;
     struct GlobalFs global_fs;
+
+    // for Prometheus metric exporter
     std::unique_ptr<OverlayBDMetric> metrics;
     ExporterServer *exporter = nullptr;
     bool show_metrics;
+
+    // for gzip file cache
+    Cache::FileCachePool *pool = nullptr;
+    IOAlloc *io_alloc = nullptr;
 
 private:
     int read_global_config_and_set();

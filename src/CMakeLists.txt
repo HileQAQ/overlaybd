@@ -25,6 +25,7 @@ target_include_directories(overlaybd_image_lib PUBLIC
 target_link_libraries(overlaybd_image_lib
   photon_static
   overlaybd_lib
+  cache_lib
   ${CURL_LIBRARIES}
   ${OPENSSL_SSL_LIBRARY}
   ${OPENSSL_CRYPTO_LIBRARY}

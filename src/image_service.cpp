@@ -26,6 +26,7 @@
 #include <photon/net/socket.h>
 #include <photon/thread/thread.h>
 #include "overlaybd/cache/cache.h"
+#include "overlaybd/cache/full_file_cache/cache_pool.h"
 #include "overlaybd/registryfs/registryfs.h"
 #include "overlaybd/tar_file.h"
 #include "overlaybd/zfile/zfile.h"
@@ -392,6 +393,22 @@ int ImageService::init() {
             auto io_alloc = new IOAlloc;
             global_fs.io_alloc = io_alloc;
             global_fs.remote_fs = FileSystem::new_download_cached_fs(global_fs.srcfs, 4096, refill_size, io_alloc);
+        }
+
+        if (global_conf.gzipCacheConfig().enable()) {
+            LOG_INFO("use gzip file cache");
+            auto gzip_conf = global_conf.gzipCacheConfig();
+            if (!create_dir(gzip_conf.cacheDir().c_str()))
+                return -1;
+            auto gzip_cache_fs = new_localfs_adaptor(gzip_conf.cacheDir().c_str());
+            if (gzip_cache_fs == nullptr) {
+                delete global_fs.srcfs;
+                LOG_ERROR_RETURN(0, -1, "new_localfs_adaptor for ` failed", gzip_conf.cacheDir().c_str());
+            }
+            pool = new Cache::FileCachePool(gzip_cache_fs, gzip_conf.cacheSizeGB(), 1000 * 1000,
+                                            (uint64_t)1048576 * 4096, gzip_conf.refillSize(), nullptr);
+            pool->Init();
+            io_alloc = new IOAlloc;
         }
 
         if (global_fs.remote_fs == nullptr) {
