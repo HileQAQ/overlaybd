@@ -372,6 +372,14 @@ photon::fs::IFile* new_gzfile(photon::fs::IFile* gzip_file, photon::fs::IFile* i
     return rst;
 }
 
+photon::fs::IFile *gzip_open_ro(IFile *file, bool verify, bool ownership) {
+    ;
+}
+
+photon::fs::IFile *new_decompressed_gzip(IFile *file, const char* file_path, bool ownership) {
+    ;
+}
+
 bool is_gzfile(photon::fs::IFile* file) {
     char buf[4] = {0};
     file->read(buf, 2);

@@ -23,6 +23,7 @@
 #include <photon/fs/localfs.h>
 #include "overlaybd/tar_file.h"
 #include "overlaybd/zfile/zfile.h"
+#include "overlaybd/gzindex/gzfile.h"
 
 using namespace std;
 using namespace photon::fs;
@@ -50,6 +51,21 @@ static IFile *try_open_zfile(IFile *file, bool verify, const char *file_path) {
                              errno, strerror(errno));
         }
         return zf;
+    }
+    return file;
+}
+
+// TODO: check if the `file` is gzip format
+static IFile *try_open_gzfile(IFile *file, bool verify, const char *file_path) {
+    auto is_gzip = is_gzfile(file);
+    // open gzip
+    if (is_gzip == 1) {
+        auto gzfile = gzip_open_ro(file, verify, true);
+        if (!gzfile) {
+            LOG_ERROR_RETURN(0, nullptr, "zfile_open_ro failed, path: `: error: `(`)", file_path,
+                             errno, strerror(errno));
+        }
+        return gzfile;
     }
     return file;
 }
@@ -83,6 +99,8 @@ public:
         }
 
         file = try_open_zfile(new_tar_file_adaptor(file), false, m_filepath.c_str());
+        // TODO: try_open_gzfile (and decompress here?)
+        file = try_open_gzfile(file, false, m_filepath.c_str());
         LOG_INFO("switch to localfile '`' success.", m_filepath);
         m_local_file = file;
     }
@@ -156,6 +174,7 @@ ISwitchFile *new_switch_file(IFile *source, bool local, const char *file_path) {
     int retry = 1;
 again:
     auto file = try_open_zfile(new_tar_file_adaptor(source), !local, file_path);
+    file = try_open_gzfile(source, !local, file_path);
     if (file == nullptr) {
         if (retry--) // may retry after cache evict
             goto again;

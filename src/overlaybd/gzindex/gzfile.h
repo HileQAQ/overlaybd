@@ -34,4 +34,8 @@ extern photon::fs::IFile* new_gzfile(photon::fs::IFile* gzip_file, photon::fs::I
 //9: best compression
 extern int create_gz_index(photon::fs::IFile* gzip_file, const char *index_file_path, off_t chunk_size=1048576, int dict_compress_algo=1, int dict_compress_level=6);
 
+photon::fs::IFile *gzip_open_ro(IFile *file, bool verify, bool ownership);
+
+photon::fs::IFile *new_decompressed_gzip(IFile *file, const char* file_path, bool ownership);
+
 bool is_gzfile(photon::fs::IFile* file);

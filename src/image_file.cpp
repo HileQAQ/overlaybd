@@ -121,8 +121,41 @@ IFile *ImageFile::__open_ro_target_remote(const std::string &dir, const std::str
             set_failed("failed to open remote file " + url);
         LOG_ERROR_RETURN(0, nullptr, "failed to open remote file `", url);
     }
+    // BKDL for fastoci
+    ISwitchFile *switch_file = new_switch_file(remote_file);
+    if (!switch_file) {
+        set_failed("failed to open switch file `" + url);
+        delete remote_file;
+        LOG_ERROR_RETURN(0, nullptr, "failed to open switch file `", url);
+    }
 
-    return remote_file;
+    IFile *file = switch_file;
+    if (m_prefetcher != nullptr) {
+        file = m_prefetcher->new_prefetch_file(switch_file, layer_index);
+    }
+
+    IFile *sure_file = new_sure_file(file, this);
+    if (!sure_file) {
+        set_failed("failed to open sure file `" + url);
+        delete switch_file;
+        LOG_ERROR_RETURN(0, nullptr, "failed to open sure file `", url);
+    }
+
+    if (conf.HasMember("download") && conf.download().enable() == 1) {
+        // download from registry, verify sha256 after downloaded.
+        IFile *srcfile = image_service.global_fs.srcfs->open(url.c_str(), O_RDONLY);
+        if (srcfile == nullptr) {
+            LOG_WARN("failed to open source file, ignore download");
+        } else {
+            BKDL::BkDownload *obj =
+                new BKDL::BkDownload(switch_file, srcfile, size, dir, conf.download().maxMBps(),
+                                     conf.download().tryCnt(), this, data_digest);
+            LOG_DEBUG("add to download list for `", dir);
+            dl_list.push_back(obj);
+        }
+    }
+
+    return sure_file;
 }
 
 IFile *ImageFile::__open_ro_remote(const std::string &dir, const std::string &digest,
@@ -298,15 +331,21 @@ int ImageFile::open_lower_layer(IFile *&file, ImageConfigNS::LayerConfig &layer,
     }
 
     IFile *target_file = nullptr;
-
-    if (layer.targetFile() != "") {
+    bool local_decompressed = false;
+    if (layer.targetDigest() != "" && BKDL::check_downloaded(layer.dir())) {
+        opened = layer.dir() + "/" + BKDL::COMMIT_FILE_NAME;
+        target_file = __open_ro_target_file(opened);
+        local_decompressed = true;
+    } else if (layer.targetFile() != "") {
         LOG_INFO("open local data file `", layer.targetFile());
         target_file = __open_ro_target_file(layer.targetFile());
     } else if (layer.targetDigest() != "") {
         LOG_INFO("open remote data file `", layer.targetDigest());
         target_file = __open_ro_target_remote(layer.dir(), layer.targetDigest(), 0, index);
     }
-    if (layer.gzipIndex() != "") {
+
+    // if downloaded and decompressed, skip it
+    if (!local_decompressed && layer.gzipIndex() != "") {
         auto gz_index = open_localfile_adaptor(layer.gzipIndex().c_str(), O_RDONLY, 0644, 0);
         if (!gz_index) {
             set_failed("failed to open gzip index " + layer.gzipIndex());
